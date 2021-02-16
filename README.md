@@ -1,4 +1,5 @@
-![](./resources/official_armmbed_example_badge.png)
+This is a modified version of the official cellular example from mbed.  This example will select NB-IoT as the Radio Access Technology.  Mbed trace is enabled to the level of 'debug'. This ensures that the debug UART will display the connection technology used.
+
 # Cellular Example
 
 This is an example based on `mbed-os` cellular APIs that demonstrates a TCP or UDP echo transaction with a public echo server.

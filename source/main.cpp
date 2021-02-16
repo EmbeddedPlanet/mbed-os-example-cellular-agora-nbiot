@@ -34,6 +34,72 @@ static constexpr char SOCKET_TYPE[] = "CellularNonIP";
 #endif
 static const char ECHO_HOSTNAME[] = MBED_CONF_APP_ECHO_SERVER_HOSTNAME;
 
+// IoT Technologies
+static const int IOT_TECHNOLOGY_CATM1           = 0;
+static const int IOT_TECHNOLOGY_NBIOT           = 1;
+static const int IOT_TECHNOLOGY_CATM1_PREFERRED = 2;
+static const int IOT_TECHNOLOGY_NBIOT_PREFERRED = 3;
+
+// Desired IoT technology
+static const int DESIRED_IOT_TECHNOLOGY = IOT_TECHNOLOGY_NBIOT;
+
+void set_iot_technology(CellularDevice *dev, int desired_iot_technology)
+{
+    int iot_technology = -1;
+
+    // Check if the device is ready
+    while (dev->is_ready() != NSAPI_ERROR_OK) {
+        // Power cycle the module
+        dev->hard_power_off();
+        dev->hard_power_on();
+        dev->soft_power_off();
+        dev->soft_power_on();
+        ThisThread::sleep_for(10000);
+        dev->init();
+    }
+    
+    // Check the current IoT technology first
+    ATHandler *at_handler = dev->get_at_handler();
+    at_handler->lock();
+    at_handler->cmd_start_stop("#WS46", "?");
+    at_handler->resp_start("#WS46:");
+
+    //2,4,12,
+    //2+8+2048 = 2058
+    //set ATT nbiot bands
+    at_handler->at_cmd_discard("#BND", "=", "%d%d%d", 5, 0, 2058);
+
+
+    // Read the current IoT technology
+    iot_technology = at_handler->read_int();
+    at_handler->resp_stop();
+
+    // If already configured as desired, return
+    if (iot_technology == desired_iot_technology) {
+        at_handler->unlock();
+        return;
+    }
+
+    //set nbiot
+    at_handler->at_cmd_discard("#WS46", "=", "%d", desired_iot_technology);
+    if (at_handler->get_last_error() != NSAPI_ERROR_OK) {
+        printf("ERROR: Unable to set IoT technology!\n");
+        at_handler->unlock();
+        return;
+    }
+
+    at_handler->unlock();
+
+    // Power cycle the module
+    dev->hard_power_off();
+    dev->hard_power_on();
+    dev->soft_power_on();
+
+    return;
+}
+
+
+
 
 class CellularDemo {
     static constexpr uint8_t RETRY_COUNT = 3;
@@ -225,7 +291,7 @@ private:
 };
 
 int main() {
-    printf("\nmbed-os-example-cellular\n");
+    printf("\nmbed-os-example-cellular-agora-nbiot\n");
 
     trace_open();
 
@@ -233,10 +299,12 @@ int main() {
     NetworkInterface *net = CellularContext::get_default_nonip_instance();
 #else
     NetworkInterface *net = CellularContext::get_default_instance();
+    CellularDevice *dev = CellularDevice::get_target_default_instance();
 #endif
 
     if (net) {
         CellularDemo example(*net);
+        set_iot_technology(dev, DESIRED_IOT_TECHNOLOGY);
         example.run();
     } else {
         printf("Failed to get_default_instance()\n");
